@@ -107,6 +107,33 @@ fun CompanionApp() {
                     }
                 }
             }
+            override fun onCharacteristicRead(
+                g: BluetoothGatt,
+                characteristic: BluetoothGattCharacteristic,
+                value: ByteArray,
+                statusCode: Int
+            ) {
+                if (statusCode == BluetoothGatt.GATT_SUCCESS) {
+                    log("READ ${characteristic.uuid}: " + value.joinToString(" ") { "%02X".format(it) } +
+                        " | ASCII=" + value.toString(Charsets.UTF_8))
+                } else {
+                    log("READ failed ${characteristic.uuid}: status=$statusCode")
+                }
+            }
+            @Suppress("DEPRECATION")
+            override fun onCharacteristicRead(
+                g: BluetoothGatt,
+                characteristic: BluetoothGattCharacteristic,
+                statusCode: Int
+            ) {
+                if (statusCode == BluetoothGatt.GATT_SUCCESS) {
+                    val value = characteristic.value ?: byteArrayOf()
+                    log("READ ${characteristic.uuid}: " + value.joinToString(" ") { "%02X".format(it) } +
+                        " | ASCII=" + value.toString(Charsets.UTF_8))
+                } else {
+                    log("READ failed ${characteristic.uuid}: status=$statusCode")
+                }
+            }
             override fun onCharacteristicChanged(g: BluetoothGatt, c: BluetoothGattCharacteristic) {
                 val bytes = c.value ?: return
                 log("RX ${c.uuid}: " + bytes.joinToString(" ") { "%02X".format(it) })
@@ -331,6 +358,22 @@ fun CompanionApp() {
                                     Text("Privacy & Settings", style = MaterialTheme.typography.titleLarge)
                                     Text("All app data stays on this phone. No login, analytics, or cloud sync.")
                                     Text("Notification forwarding is not enabled in this starter build.")
+                                    Button(onClick = {
+                                        val connectedGatt = gatt
+                                        val deviceName = connectedGatt
+                                            ?.getService(UUID.fromString("00001800-0000-1000-8000-00805f9b34fb"))
+                                            ?.getCharacteristic(UUID.fromString("00002a00-0000-1000-8000-00805f9b34fb"))
+                                        if (connectedGatt == null) {
+                                            log("Safe read test blocked: connect to the watch first")
+                                        } else if (deviceName == null) {
+                                            log("Safe read test unavailable: standard Device Name characteristic not found")
+                                        } else {
+                                            val queued = connectedGatt.readCharacteristic(deviceName)
+                                            log("Safe read request 2A00 queued=$queued")
+                                        }
+                                    }, modifier = Modifier.fillMaxWidth()) {
+                                        Text("Test watch response (safe read)")
+                                    }
                                 }
                             }
                         }
