@@ -30,9 +30,15 @@ jobs:
         run: |
           set -euo pipefail
           mv settings.gradle.kts settings.gradle.kts.bak
-          trap 'mv -f settings.gradle.kts.bak settings.gradle.kts' EXIT
+          mv build.gradle.kts build.gradle.kts.bak
+          restore() {
+            mv -f settings.gradle.kts.bak settings.gradle.kts
+            mv -f build.gradle.kts.bak build.gradle.kts
+            rm -f settings.gradle
+          }
+          trap restore EXIT
           gradle wrapper --gradle-version 8.9
-          mv settings.gradle.kts.bak settings.gradle.kts
+          restore
           trap - EXIT
       - name: Build APK
         run: ./gradlew --no-daemon --stacktrace assembleDebug
