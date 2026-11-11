@@ -125,6 +125,21 @@ fun CompanionApp() {
         }
     }
 
+    fun connectKnownWatch() {
+        if (!hasPermissions()) {
+            permissionLauncher.launch(requiredPermissions())
+            return
+        }
+        try {
+            val device = bt.adapter.getRemoteDevice("70:CF:70:F1:5B:5E")
+            status = "Trying direct BLE GATT connection to saved watch address…"
+            gatt?.close()
+            gatt = device.connectGatt(context, false, callback, BluetoothDevice.TRANSPORT_LE)
+        } catch (e: Exception) {
+            status = "Direct GATT error: ${e.message ?: "unknown"}"
+        }
+    }
+
     fun scanDevices() {
         if (!hasPermissions()) {
             permissionLauncher.launch(requiredPermissions())
@@ -198,6 +213,7 @@ fun CompanionApp() {
                                     Text("WATCH CONNECTION", style = MaterialTheme.typography.titleMedium)
                                     Text(status)
                                     Button(onClick = { scanDevices() }, modifier = Modifier.fillMaxWidth()) { Text("Scan nearby devices") }
+                                    OutlinedButton(onClick = { connectKnownWatch() }, modifier = Modifier.fillMaxWidth()) { Text("Try direct connection to saved watch") }
                                     OutlinedButton(onClick = { stopScan() }, modifier = Modifier.fillMaxWidth()) { Text("Stop scan") }
                                     OutlinedButton(onClick = {
                                         gatt?.disconnect()
