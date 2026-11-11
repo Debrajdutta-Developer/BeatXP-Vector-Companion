@@ -6,7 +6,11 @@ import android.bluetooth.*
 import android.bluetooth.le.*
 import android.content.Context
 import android.net.Uri
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Rect
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -36,6 +40,20 @@ private val uartWrite = UUID.fromString("6e400002-b5a3-f393-e0a9-e50e24dcca9e")
 private val uartNotify = UUID.fromString("6e400003-b5a3-f393-e0a9-e50e24dcca9e")
 private val cccd = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
+/** Creates a center-cropped 320x320 preview. This is not the watch's proprietary transfer encoding. */
+private fun createDialPreview(context: Context, uri: Uri): Bitmap? {
+    val source = context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) } ?: return null
+    val side = minOf(source.width, source.height)
+    val left = (source.width - side) / 2
+    val top = (source.height - side) / 2
+    val output = Bitmap.createBitmap(320, 320, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(output)
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    canvas.drawBitmap(source, Rect(left, top, left + side, top + side), Rect(0, 0, 320, 320), paint)
+    if (source !== output && !source.isRecycled) source.recycle()
+    return output
+}
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -55,7 +73,7 @@ fun CompanionApp() {
     var gatt by remember { mutableStateOf<BluetoothGatt?>(null) }
     var foundDevices by remember { mutableStateOf(listOf<BluetoothDevice>()) }
     var scanCallback by remember { mutableStateOf<ScanCallback?>(null) }
-    var selectedWallpaper by remember { mutableStateOf<Uri?>(null) }
+    var selectedWallpaper by remember { mutableStateOf<Uri?>(null)\n    var preparedWallpaper by remember { mutableStateOf<Bitmap?>(null) }\n    var prepareStatus by remember { mutableStateOf("Choose a photo to begin.") } }
     fun log(s: String) { logs = (logs + s).takeLast(80) }
     val wallpaperPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         selectedWallpaper = uri
@@ -353,31 +371,50 @@ fun CompanionApp() {
                                     Text("Choose from Gallery")
                                 }
                                 selectedWallpaper?.let { uri ->
-                                    val bitmap = remember(uri) {
+                                    val sourcePreview = remember(uri) {
                                         context.contentResolver.openInputStream(uri)?.use { input ->
                                             BitmapFactory.decodeStream(input)
                                         }
                                     }
-                                    if (bitmap != null) {
+                                    val displayBitmap = preparedWallpaper ?: sourcePreview
+                                    if (displayBitmap != null) {
                                         Image(
-                                            bitmap = bitmap.asImageBitmap(),
-                                            contentDescription = "Selected wallpaper preview",
+                                            bitmap = displayBitmap.asImageBitmap(),
+                                            contentDescription = "Wallpaper preview",
                                             modifier = Modifier.fillMaxWidth().height(260.dp),
                                             contentScale = ContentScale.Fit
                                         )
-                                        Text("Image selected successfully.")
+                                        Text(if (preparedWallpaper != null) "Prepared preview: 320 × 320 px" else "Original gallery image")
                                     } else {
                                         Text("Image selected, but preview could not be decoded.")
                                     }
+                                    Button(
+                                        onClick = {
+                                            try {
+                                                preparedWallpaper = createDialPreview(context, uri)
+                                                prepareStatus = if (preparedWallpaper != null) {
+                                                    log("Wallpaper prepared locally: 320x320 center-cropped preview")
+                                                    "Ready: 320 × 320 preview prepared on this phone."
+                                                } else "Could not decode this image."
+                                            } catch (e: Exception) {
+                                                prepareStatus = "Preparation failed: ${e.message ?: "unknown error"}"
+                                                log(prepareStatus)
+                                            }
+                                        },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) { Text("Prepare 320 × 320 Dial") }
+                                    Text(prepareStatus, color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
                                 } ?: Text("No image selected yet.")
                                 Text(
-                                    "Watch transfer is not enabled yet. The Vector firmware transfer format and packet protocol must be verified before sending a file.",
+                                    "The 320×320 image is a local preview only. Actual watch transfer needs the verified Vector firmware format and RCSP handshake; those are not confirmed yet.",
                                     color = Color.LightGray,
                                     style = MaterialTheme.typography.bodySmall
                                 )
-                                Button(onClick = { log("Transfer blocked: firmware wallpaper protocol not verified") }, enabled = false, modifier = Modifier.fillMaxWidth()) {
-                                    Text("Send to watch (not available yet)")
-                                }
+                                Button(
+                                    onClick = { log("Transfer blocked: no verified RCSP handshake or wallpaper encoding is available") },
+                                    enabled = false,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { Text("Send to watch (protocol pending)") }
                             }
                         }
                     }
