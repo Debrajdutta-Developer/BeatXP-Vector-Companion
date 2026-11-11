@@ -29,17 +29,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mv settings.gradle.kts settings.gradle.kts.bak
-          mv build.gradle.kts build.gradle.kts.bak
-          restore() {
-            mv -f settings.gradle.kts.bak settings.gradle.kts
-            mv -f build.gradle.kts.bak build.gradle.kts
-            rm -f settings.gradle
-          }
-          trap restore EXIT
+          printf "rootProject.name = 'wrapper-bootstrap'\\n" > settings.gradle
+          printf "\\n" > build.gradle
           gradle wrapper --gradle-version 8.9
-          restore
-          trap - EXIT
+          rm -f settings.gradle build.gradle
       - name: Build APK
         run: ./gradlew --no-daemon --stacktrace assembleDebug
       - uses: actions/upload-artifact@v4
