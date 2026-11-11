@@ -48,7 +48,6 @@ fun CompanionApp() {
     var activeTab by remember { mutableIntStateOf(0) }
     var logs by remember { mutableStateOf(listOf("Ready. Local-only companion.")) }
     var gatt by remember { mutableStateOf<BluetoothGatt?>(null) }
-    val scanner = bt.adapter.bluetoothLeScanner
     fun log(s: String) { logs = (logs + s).takeLast(80) }
     val callback = remember {
         object : BluetoothGattCallback() {
@@ -84,6 +83,8 @@ fun CompanionApp() {
         val perms = if (Build.VERSION.SDK_INT >= 31) arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT) else arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
         val missing = perms.filter { androidx.core.content.ContextCompat.checkSelfPermission(context, it) != android.content.pm.PackageManager.PERMISSION_GRANTED }
         if (missing.isNotEmpty()) { permissionLauncher.launch(missing.toTypedArray()); return }
+        val scanner = bt.adapter.bluetoothLeScanner
+        if (scanner == null) { status = "Bluetooth LE scanner unavailable"; return }
         status = "Scanning for BEATXP VECTOR…"
         val filters = listOf(ScanFilter.Builder().setDeviceAddress("70:CF:70:F1:5B:5E").build())
         scanner.startScan(filters, ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build(), object : ScanCallback() {
