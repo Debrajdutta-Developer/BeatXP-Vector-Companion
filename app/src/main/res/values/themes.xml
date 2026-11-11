@@ -1,0 +1,1 @@
+<resources><style name="Theme.BeatXP" parent="@android:style/Theme.Material.NoActionBar"><item name="android:fontFamily">sans</item><item name="android:colorAccent">#9A7BFF</item><item name="android:navigationBarColor">#101018</item><item name="android:statusBarColor">#101018</item></style></resources>
