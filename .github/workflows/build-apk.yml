@@ -29,8 +29,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          printf "rootProject.name = 'wrapper-bootstrap'\\n" > settings.gradle
-          printf "\\n" > build.gradle
+          echo "rootProject.name = 'wrapper-bootstrap'" > settings.gradle
+          : > build.gradle
           gradle wrapper --gradle-version 8.9
           rm -f settings.gradle build.gradle
       - name: Build APK
