@@ -63,6 +63,25 @@ fun CompanionApp() {
     }
 
     val callback = remember {
+        val descriptorQueue = mutableListOf<BluetoothGattDescriptor>()
+        var descriptorIndex = 0
+        fun writeNextDescriptor(g: BluetoothGatt) {
+            if (descriptorIndex >= descriptorQueue.size) {
+                log("Notification setup queue finished")
+                return
+            }
+            val descriptor = descriptorQueue[descriptorIndex]
+            @Suppress("DEPRECATION")
+            descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+            @Suppress("DEPRECATION")
+            val queued = g.writeDescriptor(descriptor)
+            log("CCCD write queued=" + queued + " characteristic=" + descriptor.characteristic.uuid)
+            if (!queued) {
+                log("CCCD write could not be queued; skipping " + descriptor.characteristic.uuid)
+                descriptorIndex++
+                writeNextDescriptor(g)
+            }
+        }
         object : BluetoothGattCallback() {
             override fun onConnectionStateChange(g: BluetoothGatt, statusCode: Int, newState: Int) {
                 status = if (newState == BluetoothProfile.STATE_CONNECTED) "Connected · discovering services" else "Disconnected (GATT status $statusCode)"
@@ -92,20 +111,39 @@ fun CompanionApp() {
                         log("CHAR ${characteristic.uuid} [$flags]")
                     }
                 }
-                listOf(rcspService to rcspNotify, uartService to uartNotify).forEach { (s, c) ->
-                    g.getService(s)?.getCharacteristic(c)?.let { ch ->
-                        g.setCharacteristicNotification(ch, true)
-                        ch.getDescriptor(cccd)?.let { d ->
-                            if (Build.VERSION.SDK_INT >= 33) g.writeDescriptor(d, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
-                            else {
-                                @Suppress("DEPRECATION")
-                                d.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-                                @Suppress("DEPRECATION")
-                                g.writeDescriptor(d)
-                            }
+                descriptorQueue.clear()
+                descriptorIndex = 0
+                listOf(rcspService to rcspNotify, uartService to uartNotify).forEach { (serviceId, characteristicId) ->
+                    val characteristic = g.getService(serviceId)?.getCharacteristic(characteristicId)
+                    if (characteristic == null) {
+                        log("NOTIFY characteristic missing: " + characteristicId)
+                    } else {
+                        val localEnabled = g.setCharacteristicNotification(characteristic, true)
+                        log("NOTIFY local routing=" + localEnabled + " characteristic=" + characteristicId)
+                        val descriptor = characteristic.getDescriptor(cccd)
+                        if (descriptor == null) {
+                            log("CCCD missing for characteristic=" + characteristicId)
+                        } else {
+                            descriptorQueue.add(descriptor)
                         }
                     }
                 }
+                if (descriptorQueue.isEmpty()) {
+                    log("No notification CCCD descriptors available")
+                } else {
+                    log("Notification descriptors queued=" + descriptorQueue.size + "; writing sequentially")
+                    writeNextDescriptor(g)
+                }
+            }
+            @Suppress("DEPRECATION")
+            override fun onDescriptorWrite(
+                g: BluetoothGatt,
+                descriptor: BluetoothGattDescriptor,
+                statusCode: Int
+            ) {
+                log("CCCD callback characteristic=" + descriptor.characteristic.uuid + " status=" + statusCode)
+                descriptorIndex++
+                writeNextDescriptor(g)
             }
             override fun onCharacteristicRead(
                 g: BluetoothGatt,
@@ -357,7 +395,7 @@ fun CompanionApp() {
                                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Text("Privacy & Settings", style = MaterialTheme.typography.titleLarge)
                                     Text("All app data stays on this phone. No login, analytics, or cloud sync.")
-                                    Text("Notification forwarding is not enabled in this starter build.")
+                                    Text("BLE notification diagnostics run automatically after service discovery. Check the console for CCCD callback results and RX events.")
                                     Button(onClick = {
                                         val connectedGatt = gatt
                                         val deviceName = connectedGatt
