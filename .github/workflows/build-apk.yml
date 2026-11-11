@@ -1,20 +1,23 @@
-name: Build Debug APK
+name: Android Debug APK
 
 on:
   push:
     branches: [main]
-    paths:
-      - "**"
   workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: android-debug-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
+    name: Build debug APK
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Checkout source
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
@@ -22,27 +25,26 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+          cache: gradle
 
-      - name: Set up Gradle 8.7
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Gradle 8.9
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: "8.7"
+          gradle-version: "8.9"
 
-      - name: Extract Android project archive
-        run: |
-          test -f BeatXPVectorCompanion_RCSP_ACK_v1.1.zip
-          unzip -q BeatXPVectorCompanion_RCSP_ACK_v1.1.zip -d .
+      - name: Generate Gradle wrapper
+        run: gradle wrapper --gradle-version 8.9
 
-      - name: Generate Gradle wrapper and build debug APK
-        working-directory: BeatXPVectorCompanion
-        run: |
-          gradle wrapper --gradle-version 8.7
-          chmod +x gradlew
-          ./gradlew --no-daemon assembleDebug
+      - name: Build debug APK
+        run: ./gradlew --no-daemon --stacktrace assembleDebug
 
-      - name: Upload debug APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: BeatXP-Vector-Companion-debug-apk
-          path: BeatXPVectorCompanion/app/build/outputs/apk/debug/app-debug.apk
+          path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+          retention-days: 14
