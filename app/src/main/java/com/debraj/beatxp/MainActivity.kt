@@ -66,6 +66,7 @@ fun CompanionApp() {
         object : BluetoothGattCallback() {
             override fun onConnectionStateChange(g: BluetoothGatt, statusCode: Int, newState: Int) {
                 status = if (newState == BluetoothProfile.STATE_CONNECTED) "Connected · discovering services" else "Disconnected (GATT status $statusCode)"
+                log("GATT connection state=$newState status=$statusCode")
                 if (newState == BluetoothProfile.STATE_CONNECTED) {
                     g.requestMtu(512)
                     g.discoverServices()
@@ -75,7 +76,22 @@ fun CompanionApp() {
                 status = if (statusCode == BluetoothGatt.GATT_SUCCESS &&
                     (g.getService(rcspService) != null || g.getService(uartService) != null)
                 ) "Connected · BLE services ready"
-                else "Connected · expected services not found (status $statusCode)"
+                else "Connected · services discovered: ${g.services.size} (status $statusCode)"
+                log("Service discovery status=$statusCode count=${g.services.size}")
+                g.services.forEach { service ->
+                    log("SERVICE ${service.uuid} type=${service.type}")
+                    service.characteristics.forEach { characteristic ->
+                        val p = characteristic.properties
+                        val flags = buildList {
+                            if (p and BluetoothGattCharacteristic.PROPERTY_READ != 0) add("READ")
+                            if (p and BluetoothGattCharacteristic.PROPERTY_WRITE != 0) add("WRITE")
+                            if (p and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE != 0) add("WRITE_NO_RESPONSE")
+                            if (p and BluetoothGattCharacteristic.PROPERTY_NOTIFY != 0) add("NOTIFY")
+                            if (p and BluetoothGattCharacteristic.PROPERTY_INDICATE != 0) add("INDICATE")
+                        }.joinToString(",").ifEmpty { "NO_STANDARD_PROPERTIES" }
+                        log("CHAR ${characteristic.uuid} [$flags]")
+                    }
+                }
                 listOf(rcspService to rcspNotify, uartService to uartNotify).forEach { (s, c) ->
                     g.getService(s)?.getCharacteristic(c)?.let { ch ->
                         g.setCharacteristicNotification(ch, true)
