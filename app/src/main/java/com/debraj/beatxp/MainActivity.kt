@@ -56,11 +56,11 @@ fun CompanionApp() {
     var foundDevices by remember { mutableStateOf(listOf<BluetoothDevice>()) }
     var scanCallback by remember { mutableStateOf<ScanCallback?>(null) }
     var selectedWallpaper by remember { mutableStateOf<Uri?>(null) }
+    fun log(s: String) { logs = (logs + s).takeLast(80) }
     val wallpaperPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         selectedWallpaper = uri
         if (uri != null) log("Gallery image selected: $uri")
     }
-    fun log(s: String) { logs = (logs + s).takeLast(80) }
 
     val callback = remember {
         object : BluetoothGattCallback() {
