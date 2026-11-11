@@ -73,7 +73,9 @@ fun CompanionApp() {
     var gatt by remember { mutableStateOf<BluetoothGatt?>(null) }
     var foundDevices by remember { mutableStateOf(listOf<BluetoothDevice>()) }
     var scanCallback by remember { mutableStateOf<ScanCallback?>(null) }
-    var selectedWallpaper by remember { mutableStateOf<Uri?>(null)\n    var preparedWallpaper by remember { mutableStateOf<Bitmap?>(null) }\n    var prepareStatus by remember { mutableStateOf("Choose a photo to begin.") } }
+    var selectedWallpaper by remember { mutableStateOf<Uri?>(null) }
+    var preparedWallpaper by remember { mutableStateOf<Bitmap?>(null) }
+    var prepareStatus by remember { mutableStateOf("Choose a photo to begin.") }
     fun log(s: String) { logs = (logs + s).takeLast(80) }
     val wallpaperPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         selectedWallpaper = uri
@@ -433,6 +435,38 @@ fun CompanionApp() {
                                     Text("Privacy & Settings", style = MaterialTheme.typography.titleLarge)
                                     Text("All app data stays on this phone. No login, analytics, or cloud sync.")
                                     Text("BLE notification diagnostics run automatically after service discovery. Check the console for CCCD callback results and RX events.")
+                                    OutlinedButton(onClick = {
+                                        val connectedGatt = gatt
+                                        if (connectedGatt == null) {
+                                            log("Device information read blocked: connect to the watch first")
+                                        } else {
+                                            val service = connectedGatt.getService(UUID.fromString("0000180a-0000-1000-8000-00805f9b34fb"))
+                                            if (service == null) {
+                                                log("Standard Device Information service 180A is not exposed")
+                                            } else {
+                                                val ids = listOf(
+                                                    "00002a29-0000-1000-8000-00805f9b34fb",
+                                                    "00002a24-0000-1000-8000-00805f9b34fb",
+                                                    "00002a25-0000-1000-8000-00805f9b34fb",
+                                                    "00002a27-0000-1000-8000-00805f9b34fb",
+                                                    "00002a26-0000-1000-8000-00805f9b34fb",
+                                                    "00002a28-0000-1000-8000-00805f9b34fb"
+                                                )
+                                                val readable = ids.mapNotNull { service.getCharacteristic(UUID.fromString(it)) }
+                                                    .filter { it.properties and BluetoothGattCharacteristic.PROPERTY_READ != 0 }
+                                                log("180A standard info characteristics found=${readable.size}")
+                                                if (readable.isNotEmpty()) {
+                                                    val first = readable.first()
+                                                    val queued = connectedGatt.readCharacteristic(first)
+                                                    log("Safe info read queued=${queued} uuid=${first.uuid}")
+                                                } else {
+                                                    log("No readable standard info characteristics exposed")
+                                                }
+                                            }
+                                        }
+                                    }, modifier = Modifier.fillMaxWidth()) {
+                                        Text("Read device information (safe)")
+                                    }
                                     Button(onClick = {
                                         val connectedGatt = gatt
                                         val deviceName = connectedGatt
