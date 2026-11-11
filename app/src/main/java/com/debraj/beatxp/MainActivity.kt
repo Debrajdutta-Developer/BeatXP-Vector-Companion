@@ -5,6 +5,8 @@ import android.annotation.SuppressLint
 import android.bluetooth.*
 import android.bluetooth.le.*
 import android.content.Context
+import android.net.Uri
+import android.graphics.BitmapFactory
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -12,6 +14,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -20,6 +23,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import java.util.UUID
 
@@ -50,6 +55,11 @@ fun CompanionApp() {
     var gatt by remember { mutableStateOf<BluetoothGatt?>(null) }
     var foundDevices by remember { mutableStateOf(listOf<BluetoothDevice>()) }
     var scanCallback by remember { mutableStateOf<ScanCallback?>(null) }
+    var selectedWallpaper by remember { mutableStateOf<Uri?>(null) }
+    val wallpaperPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        selectedWallpaper = uri
+        if (uri != null) log("Gallery image selected: $uri")
+    }
     fun log(s: String) { logs = (logs + s).takeLast(80) }
 
     val callback = remember {
@@ -255,10 +265,38 @@ fun CompanionApp() {
                     }
                     1 -> item {
                         ElevatedCard {
-                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 Text("Wallpaper Studio", style = MaterialTheme.typography.titleLarge)
-                                Text("Choose an image and preview it here. Watch transfer is disabled until the firmware-specific file header is verified.")
-                                Button(onClick = { log("Wallpaper import UI planned for next build") }) { Text("Wallpaper tools") }
+                                Text("Choose a photo from your phone gallery.")
+                                Button(onClick = { wallpaperPicker.launch("image/*") }, modifier = Modifier.fillMaxWidth()) {
+                                    Text("Choose from Gallery")
+                                }
+                                selectedWallpaper?.let { uri ->
+                                    val bitmap = remember(uri) {
+                                        context.contentResolver.openInputStream(uri)?.use { input ->
+                                            BitmapFactory.decodeStream(input)
+                                        }
+                                    }
+                                    if (bitmap != null) {
+                                        Image(
+                                            bitmap = bitmap.asImageBitmap(),
+                                            contentDescription = "Selected wallpaper preview",
+                                            modifier = Modifier.fillMaxWidth().height(260.dp),
+                                            contentScale = ContentScale.Fit
+                                        )
+                                        Text("Image selected successfully.")
+                                    } else {
+                                        Text("Image selected, but preview could not be decoded.")
+                                    }
+                                } ?: Text("No image selected yet.")
+                                Text(
+                                    "Watch transfer is not enabled yet. The Vector firmware transfer format and packet protocol must be verified before sending a file.",
+                                    color = Color.LightGray,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                                Button(onClick = { log("Transfer blocked: firmware wallpaper protocol not verified") }, enabled = false, modifier = Modifier.fillMaxWidth()) {
+                                    Text("Send to watch (not available yet)")
+                                }
                             }
                         }
                     }
